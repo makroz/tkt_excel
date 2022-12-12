@@ -69,6 +69,7 @@ Route::get('estudiantes/vdni/{id}/{eventos_id}', 'App\Http\Controllers\Estudiant
 Route::get('buscar_usuarios/{pais}/{dato?}', 'App\Http\Controllers\EstudianteController@buscar_estudiantes');
 
 // export 
+Route::get('export2', ['as' => 'estudiantes.export2', 'uses' => 'App\Http\Controllers\EstudianteController@EstudianteExport2']);
 Route::get('export', ['as' => 'estudiantes.export', 'uses' => 'App\Http\Controllers\EstudianteController@EstudianteExport']);
 Route::post('import', ['as' => 'estudiantes.import', 'uses' => 'App\Http\Controllers\EstudianteController@EstudianteImport']);
 Route::post('importsave', ['as' => 'estudiantes.importsave', 'uses' => 'App\Http\Controllers\EstudianteController@EstudianteImportSave']);

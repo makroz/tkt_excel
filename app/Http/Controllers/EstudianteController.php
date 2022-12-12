@@ -2,27 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use App\Repositories\EstudianteRepository;
 use DB;
-use Cache;
-use Illuminate\Http\Request;
-use Jenssegers\Date\Date;
-use Carbon\Carbon;
-use App\Estudiante, App\Emails;
-use App\TipoDoc;
-use App\Departamento;
-use App\Provincia;
-use App\Distrito;
-use App\ConsultaDNI;
-use App\EstudianteTemp;
-use App\estudiantes_act_detalle;
-
-use Illuminate\Support\Facades\Crypt;
-use App\AccionesRolesPermisos;
-use Mail;
-use Excel;
-use Alert;
 use Auth;
+use Mail;
+use Alert;
+use Cache;
+//use Excel;
+use Maatwebsite\Excel\Facades\Excel;
+use App\TipoDoc;
+use App\Distrito;
+use App\Provincia;
+use Carbon\Carbon;
+use App\ConsultaDNI;
+use App\Departamento;
+use App\EstudianteTemp;
+use Jenssegers\Date\Date;
+
+use Illuminate\Http\Request;
+use App\AccionesRolesPermisos;
+use App\Estudiante, App\Emails;
+use App\estudiantes_act_detalle;
+use App\Exports\EstudianteExport;
+use App\Imports\EstudianteImport;
+use Illuminate\Support\Facades\Crypt;
+use App\Repositories\EstudianteRepository;
 
 class EstudianteController extends Controller
 {
@@ -101,6 +104,7 @@ class EstudianteController extends Controller
       "tipo" => "E"
     );
     $estudiantes_datos = $repository->search($data);
+    dump($estudiantes_datos);
 
     // BLOQUEO DE IMPORT / DE BAJA/ REENVIAR INVITACIÓN
     $rs_datos = DB::table('eventos as e')
@@ -222,29 +226,33 @@ class EstudianteController extends Controller
     }
   }
 
-  public function EstudianteExport()
+  public function EstudianteExport2(EstudianteExport $export)
   {
-    Excel::create('Participantes', function ($excel) {
-
-      //$estudiantes = Estudiante::all();
-      $estudiantes = Estudiante::join('estudiantes_act_detalle as de', 'de.estudiantes_id', '=', 'estudiantes.dni_doc')
-        ->orderBy('estudiantes.id', 'asc')
-        ->get();
-
-      //sheet -> nomb de hoja
-      $excel->sheet('Estudiante', function ($sheet) use ($estudiantes) {
-        //$sheet->fromArray($estudiantes); // muestra todos los campos
-        $sheet->row(1, [
-          'DNI', 'Nombres', 'Ap. Paterno', 'Ap. Materno', 'Email', 'Registrado', 'Fecha de Actualización', 'Tipo'
-        ]);
-        foreach ($estudiantes as $index => $estud) {
-          $sheet->row($index + 2, [
-            $estud->dni_doc, $estud->nombres, $estud->ap_paterno, $estud->ap_materno, $estud->email, $estud->accedio, $estud->updated_at, $estud->estudiantes_tipo_id
-          ]);
-        }
-      });
-    })->export('xlsx');
+    return Excel::download($export, 'Estudiantes.xlsx');
   }
+  // public function EstudianteExport()
+  // {
+  //   Excel::create('Participantes', function ($excel) {
+
+  //     //$estudiantes = Estudiante::all();
+  //     $estudiantes = Estudiante::join('estudiantes_act_detalle as de', 'de.estudiantes_id', '=', 'estudiantes.dni_doc')
+  //       ->orderBy('estudiantes.id', 'asc')
+  //       ->get();
+
+  //     //sheet -> nomb de hoja
+  //     $excel->sheet('Estudiante', function ($sheet) use ($estudiantes) {
+  //       //$sheet->fromArray($estudiantes); // muestra todos los campos
+  //       $sheet->row(1, [
+  //         'DNI', 'Nombres', 'Ap. Paterno', 'Ap. Materno', 'Email', 'Registrado', 'Fecha de Actualización', 'Tipo'
+  //       ]);
+  //       foreach ($estudiantes as $index => $estud) {
+  //         $sheet->row($index + 2, [
+  //           $estud->dni_doc, $estud->nombres, $estud->ap_paterno, $estud->ap_materno, $estud->email, $estud->accedio, $estud->updated_at, $estud->estudiantes_tipo_id
+  //         ]);
+  //       }
+  //     });
+  //   })->export('xlsx');
+  // }
 
 
   /**
@@ -1027,12 +1035,13 @@ class EstudianteController extends Controller
       \Config::set('excel.import.encoding.input', 'iso-8859-1');
       \Config::set('excel.import.encoding.output', 'iso-8859-1');
 
-      $reader = \Excel::selectSheetsByIndex(0)->load($request->file('file')->getRealPath())->formatDates(true, 'd/m/Y');
-
-      $results = $reader->noHeading()->get()->toArray();   //this will convert file to array
+      //$reader = \Excel::selectSheetsByIndex(0)->load($request->file('file')->getRealPath())->formatDates(true, 'd/m/Y');
+      //$results = $reader->noHeading()->get()->toArray();   //this will convert file to array
+      $results = \Excel::toArray(new EstudianteImport, $request->file('file')->getRealPath());
+      $results = $results[0];
       //$file->move( base_path('storage\excel'),"estudiantes.".$extension );
       $file->move(base_path('storage\excel'), "estudiantes.xlsx");
-      echo $results;
+      //print_r($results);
     }
 
     return $results;
@@ -1048,8 +1057,11 @@ class EstudianteController extends Controller
     \Config::set('excel.import.encoding.input', 'iso-8859-1');
     \Config::set('excel.import.encoding.output', 'iso-8859-1');
 
-    $reader = \Excel::selectSheetsByIndex(0)->load($file_path . "/" . $file_exc)->formatDates(true, 'd/m/Y');
-    $data_exc = $reader->noHeading()->get()->toArray();
+    $results = \Excel::toArray(new EstudianteImport, $file_path . "/" . $file_exc);
+    $data_exc = $results[0];
+
+    // $reader = \Excel::selectSheetsByIndex(0)->load($file_path . "/" . $file_exc)->formatDates(true, 'd/m/Y');
+    // $data_exc = $reader->noHeading()->get()->toArray();
 
     $flagC = $request["chkPrimeraFila"];
     $chkE_invitacion = $request["chkE_invitacion"];
@@ -1190,6 +1202,15 @@ class EstudianteController extends Controller
               $email_partes = explode(" ", $d_email);
               $estTemp->email = $email_partes[0];
               $mailT = $email_partes[0];
+              // VERIFICO SI ES VALIDO
+              $sanitized_email = filter_var($mailT, FILTER_SANITIZE_EMAIL);
+              if (filter_var($sanitized_email, FILTER_VALIDATE_EMAIL)) {
+                $estTemp->email = $sanitized_email;
+                $mailT = $sanitized_email;
+              } else {
+                $estTemp->email = "";
+                $mailT = "";
+              }
             }
           }
 
@@ -1428,7 +1449,8 @@ class EstudianteController extends Controller
             }
 
             //si las columnas del excel es igual o mayor a las columas de la BD actualizar la fila
-            if ($colEst2 >= $colEst1) {
+            //if ($colEst2 >= $colEst1) {
+            if ($colEst2 > 0) {
               $verEst->nombres = mb_strtoupper($nomT);
               $verEst->dni_doc = $dniT;
               $verEst->ap_paterno = mb_strtoupper($appT);
